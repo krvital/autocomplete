@@ -52,7 +52,7 @@
   const loadMore = (value, type, page) =>
     API.findByType(type, { s: value, page }).then(convertType);
 
-  const autocompleteElement = document.querySelector('.ac');
+  const autocompleteElement = document.querySelector('.ac-wrapper');
 
   autocomplete(autocompleteElement, {
     onSearch: findAllByTitle,

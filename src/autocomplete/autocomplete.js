@@ -1,6 +1,6 @@
 const autocomplete = (function () {
   /**
-   * Utils section
+   * Utils
    */
   function debounce(fn, delay) {
     let t;
@@ -37,7 +37,7 @@ const autocomplete = (function () {
   }
 
   /**
-   * Components section
+   * Components
    */
   class AbstractComponent {
     constructor(data = {}) {
@@ -45,66 +45,69 @@ const autocomplete = (function () {
         throw new Error("Can not instantiate AbstractComponent");
       }
 
-      this._data = data;
-      this._element = createElement(this._getTemplate(data));
-      this._initEventListeners();
+      this._element = createElement(this.getTemplate(data));
+      this.data = data;
+      this.initEventListeners();
+      this.afterInit();
     }
 
     getElement() {
       return this._element;
     }
 
-    _getTemplate() {
+    getTemplate() {
       throw new Error("_getTemplate is not defined");
     }
 
-    _initEventListeners() {}
+    initEventListeners() {}
+
+    afterInit() {}
   }
 
   class NoResultsComponent extends AbstractComponent {
-    _getTemplate({ message }) {
+    getTemplate({ message }) {
       const DEFAULT_MESSAGE = "Please enter anything else";
 
       return `
         <div>
           <p class="ac-no-results__caption">No results found</p>
-          <p class="ac-no-results__message">${message ?? DEFAULT_MESSAGE}</p>
+          <p class="ac-no-results__message">${message || DEFAULT_MESSAGE}</p>
         </div>
       `;
     }
   }
 
   class SectionComponent extends AbstractComponent {
-    _initEventListeners() {
+    initEventListeners() {
       this._element.addEventListener("click", (e) => {
         if (e.target.tagName === "BUTTON") {
-          this._handleClickLoadMore(e.target);
+          this.handleClickLoadMore(e.target);
         }
 
         if (e.target.tagName === "LI") {
-          this._data.onSelectItem(e.target.dataset.id);
+          this.data.onSelectItem(e.target.dataset.id);
         }
       });
     }
 
-    _handleClickLoadMore() {
-      this._setLoadingState(true);
+    handleClickLoadMore() {
+      this.setLoadingState(true);
 
-      this._data.onLoadMore(this._data.section).then((items) => {
-        this._setLoadingState(false);
-        this._addItems(items);
+      this.data.onLoadMore(this.data.section).then((items) => {
+        this.setLoadingState(false);
+        this.addItems(items);
       });
     }
 
-    _addItems(items) {
-      const listElement = this._getListElement();
-      const itemElements = createElements(this._getItemsTemplate(items));
+    addItems(items) {
+      const listElement = this.selectListNode();
+      const itemElements = createElements(this.getItemsTemplate(items));
 
       listElement.append(...itemElements);
     }
 
-    _setLoadingState(isLoading) {
-      const buttonElement = this._getButtonElement();
+    setLoadingState(isLoading) {
+      const buttonElement = this.selectButtonNode();
 
       if (isLoading) {
         buttonElement.disabled = true;
@@ -115,7 +118,7 @@ const autocomplete = (function () {
       }
     }
 
-    _getListElement() {
+    selectListNode() {
       if (!this._listElement) {
         this._listElement = this.getElement().querySelector("ul");
       }
@@ -123,7 +126,7 @@ const autocomplete = (function () {
       return this._listElement;
     }
 
-    _getButtonElement() {
+    selectButtonNode() {
       if (!this._buttonElement) {
         this._buttonElement = this.getElement().querySelector("button");
       }
@@ -131,7 +134,7 @@ const autocomplete = (function () {
       return this._buttonElement;
     }
 
-    _getButtonMoreTemplate() {
+    getButtonMoreTemplate() {
       return `
         <button class="ac__load-more-button" type="button">
           Load more
@@ -139,7 +142,7 @@ const autocomplete = (function () {
       `;
     }
 
-    _getItemTemplate(item) {
+    getItemTemplate(item) {
       const image = item.img ?? "http://via.placeholder.com/30x40";
 
       return `
@@ -150,115 +153,151 @@ const autocomplete = (function () {
       `;
     }
 
-    _getItemsTemplate(items) {
-      return items.map(this._getItemTemplate).join("");
+    getItemsTemplate(items, itemTemplate) {
+      const template = itemTemplate || this.getItemTemplate
+      return items.map(template).join("");
     }
 
-    _getTemplate({ items, section }) {
+    getTemplate({ items, section, itemTemplate }) {
       return `
         <div class="ac__section">
           <p class="ac__list-header">${section}</p>
           <ul class="ac__list" data-type="${section}">
-            ${items.map(this._getItemTemplate).join("")}
+            ${this.getItemsTemplate(items, itemTemplate)}
           </ul>
-          ${this._getButtonMoreTemplate(section)}
+          ${this.getButtonMoreTemplate(section)}
+        </div>
+      `;
+    }
+  }
+
+  class Autocomplete extends AbstractComponent {
+    constructor(data) {
+      super(data);
+
+      const SEARCH_TIMEOUT = 500;
+
+      this.currentSearch = "";
+      this.debouncedInputChange = debounce(this.handleInputChange.bind(this), SEARCH_TIMEOUT);
+    }
+
+    initEventListeners() {
+      this.inputNode.addEventListener("keyup", (e) => this.handleInputKeyup(e));
+
+      document.addEventListener("click", (e) => {
+        if (!this._element.contains(e.target)) {
+          this.handleClickOutside();
+        }
+      });
+    }
+
+    handleInputKeyup(e) {
+      this.currentSearch = e.target.value;
+      this.debouncedInputChange(this.currentSearch);
+    }
+
+    handleInputChange(value) {
+      if (value.length < 3) {
+        hideElement(this.dropdownNode);
+        return;
+      }
+
+      showElement(this.spinnerNode);
+
+      this.data.onSearch(value).then((r) => {
+        hideElement(this.spinnerNode);
+        this.handleSearchFinish(r);
+      });
+    }
+
+    handleClickOutside() {
+      hideElement(this.dropdownNode);
+    }
+
+    handleSearchFinish(results) {
+      const isSectionFilled = (section) => results[section].length > 0;
+      const areResultsFound = Object.keys(results).some(isSectionFilled);
+
+      if (areResultsFound) {
+        const sections = Object.keys(results)
+          .filter(isSectionFilled)
+          .map((section) => this.createSection(section, results[section]));
+
+        this.showResults(sections);
+      } else {
+        this.showEmptyResults();
+      }
+    }
+
+    handleLoadMore(section) {
+      return this.data.onLoadMore(this.currentSearch, section);
+    }
+
+    showResults(sections) {
+      removeChildrenNodes(this.dropdownNode);
+      this.dropdownNode.append(...sections);
+      showElement(this.dropdownNode);
+    }
+
+    showEmptyResults() {
+      const noResults = new NoResultsComponent(this.data.noResultsMessage);
+
+      removeChildrenNodes(this.dropdownNode);
+      this.dropdownNode.append(noResults.getElement());
+      showElement(this.dropdownNode);
+    }
+
+    get spinnerNode() {
+      return this._element.querySelector("[ac-element='spinner']");
+    }
+
+    get dropdownNode() {
+      return this._element.querySelector("[ac-element='dropdown']");
+    }
+
+    get inputNode() {
+      return this._element.querySelector("input");
+    }
+
+    createSection(section, items) {
+      const sectionComponent = new SectionComponent({
+        items,
+        section,
+        onLoadMore: this.handleLoadMore.bind(this),
+        onSelectItem: this.data.onSelectItem,
+        itemTemplate: this.data.itemTemplate
+      });
+
+      return sectionComponent.getElement();
+    }
+
+    getTemplate() {
+      return `
+        <div class="ac">
+          <input class="ac__input" type="text" placeholder="Search a movie..." />
+          <div class="ac__dropdown" ac-element="dropdown"></div>
+          <img
+            class="ac__spinner"
+            ac-element="spinner"
+            src="./src/autocomplete/spinner.svg"
+          />
         </div>
       `;
     }
   }
 
   return function autocomplete(element, config = {}) {
-    const DEFAULT_SEARCH_TIMEOUT = 500;
+    const noop = () => {}
 
-    const rootNode = element;
-
-    const inputNode = rootNode.querySelector('[ac-element="input"]');
-    const dropdownNode = rootNode.querySelector('[ac-element="dropdown"]');
-    const spinnerNode = rootNode.querySelector('[ac-element="spinner"]');
-
-    const onSearch = config.onSearch;
-    const onLoadMore = config.onLoadMore;
-    const onSelectItem = config.onSelectItem;
-    const searchTimeout = config.searchTimeout || DEFAULT_SEARCH_TIMEOUT;
-
-    let currentSearch = "";
-
-    /* Event listeners */
-    inputNode.addEventListener("keyup", handleInputKeyup);
-    document.addEventListener("click", (e) => {
-      if (!rootNode.contains(e.target)) {
-        handleClickOutside();
-      }
+    const autocomplete =  new Autocomplete({
+      onSearch: config.onSearch || noop,
+      onLoadMore: config.onLoadMore || noop,
+      onSelectItem: config.onSelectItem || noop,
+      noResultsMessage: config.noResultsMessage,
+      itemTemplate: config.itemTemplate
     });
 
-    /* Handlers */
-    const debouncedInputChange = debounce(handleInputChange, searchTimeout);
-
-    function handleInputChange(value) {
-      if (value.length < 3) {
-        hideElement(dropdownNode);
-        return;
-      }
-
-      showElement(spinnerNode);
-
-      onSearch(value).then((r) => {
-        hideElement(spinnerNode);
-        handleSearchFinish(r);
-      });
-    }
-
-    function handleInputKeyup(e) {
-      currentSearch = e.target.value;
-      debouncedInputChange(currentSearch);
-    }
-
-    function handleClickOutside() {
-      hideElement(dropdownNode);
-    }
-
-    function handleLoadMore(section) {
-      return onLoadMore(currentSearch, section);
-    }
-
-    function handleSearchFinish(results) {
-      const isSectionFilled = (section) => results[section].length > 0;
-      const areResultsFound = Object.keys(results).some(isSectionFilled);
-
-      if (areResultsFound) {
-        const createSection = (items, section) => {
-          const sectionComponent = new SectionComponent({
-            items,
-            section,
-            onLoadMore: handleLoadMore,
-            onSelectItem,
-          });
-
-          return sectionComponent.getElement();
-        };
-
-        const sections = Object.keys(results)
-          .filter(isSectionFilled)
-          .map((section) => createSection(results[section], section));
-
-        showResults(sections);
-      } else {
-        showEmptyResults();
-      }
-    }
-
-    function showResults(sections) {
-      removeChildrenNodes(dropdownNode);
-      dropdownNode.append(...sections);
-      showElement(dropdownNode);
-    }
-
-    function showEmptyResults() {
-      const noResults = new NoResultsComponent();
-
-      removeChildrenNodes(dropdownNode);
-      dropdownNode.append(noResults.getElement());
-      showElement(dropdownNode);
-    }
+    removeChildrenNodes(element);
+    element.append(autocomplete.getElement())
   };
 })();
