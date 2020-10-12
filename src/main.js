@@ -13,7 +13,7 @@
       {}
     );
 
-  const dataLoader = (value) => API.findAllByTitle(value).then(convertTypes);
+  const findAllByTitle = (value) => API.findAllByTitle(value).then(convertTypes);
 
   const createPaginatedMovieLoader = () => {
     const initialPageType = {
@@ -53,8 +53,9 @@
     API.findByType(type, { s: value, page }).then(convertType);
 
   const autocompleteElement = document.querySelector('.ac');
+
   autocomplete(autocompleteElement, {
-    dataLoader,
+    onSearch: findAllByTitle,
     onLoadMore: createPaginatedMovieLoader(),
     onSelectItem: (id) => console.log('item ' + id + ' selected'),
     noResultsMessage:

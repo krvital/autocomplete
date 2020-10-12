@@ -1,256 +1,264 @@
-function debounce(fn, delay) {
-  let t;
-  return (...args) => {
-    clearTimeout(t);
-    t = setTimeout(() => fn(...args), delay);
-  };
-}
-
-function createElement(template) {
-  const newElement = document.createElement(`div`);
-  newElement.innerHTML = template;
-  return newElement.firstElementChild;
-}
-
-function removeChildrenNodes(element) {
-  while (element.firstChild) {
-    element.removeChild(element.firstChild);
-  }
-}
-
-function showElement(element) {
-  element.style.display = 'block';
-}
-
-function hideElement(element) {
-  element.style.display = 'none';
-}
-
-class AbstractComponent {
-  constructor(data = {}) {
-    if (new.target === AbstractComponent) {
-      throw new Error('Can not instantiate AbstractComponent');
-    }
-
-    this._data = data;
-    this._element = createElement(this._getTemplate(data));
-    this._initEventListeners();
-  }
-
-  getElement() {
-    return this._element;
-  }
-
-  _getTemplate() {
-    throw new Error('_getTemplate is not defined');
-  }
-
-  _initEventListeners() {}
-}
-
-class NoResultsComponent extends AbstractComponent {
-  _getTemplate({ message }) {
-    const DEFAULT_MESSAGE = 'Please enter anything else';
-
-    return `
-      <div>
-        <p class="ac-no-results__caption">No results found</p>
-        <p class="ac-no-results__message">${message ?? DEFAULT_MESSAGE}</p>
-      </div>
-    `;
-  }
-}
-
-class SectionComponent extends AbstractComponent {
-  _initEventListeners() {
-    this._element.addEventListener('click', (e) => {
-      if (e.target.tagName === 'BUTTON') {
-        this._handleClickLoadMore(e.target);
-      }
-    });
-  }
-
-  _handleClickLoadMore() {
-    this._disableLoadingButton();
-
-    this._loadMore(currentSearch, this._data.name).then((items) => {
-      this._enableLoadingButton();
-      this._addItems(items);
-    });
-  }
-
-  _addItems(items) {
-    const listElement = this._getListElement();
-    const itemsElement = createElement(this._getItemsTemplate(items));
-    listElement.append(...itemsElement.children);
-  }
-
-  _disableLoadingButton() {
-    const buttonElement = this._getButtonElement();
-    buttonElement.disabled = true;
-    buttonElement.innerText = 'Loading...';
-  }
-
-  _enableLoadingButton() {
-    const buttonElement = this._getButtonElement();
-    buttonElement.disabled = false;
-    buttonElement.innerText = 'Load more';
-  }
-
-  _getListElement() {
-    if (!this._listElement) {
-      this._listElement = this.getElement().querySelector('ul');
-    }
-
-    return this._listElement;
-  }
-
-  _getButtonElement() {
-    if (!this._buttonElement) {
-      this._buttonElement = this.getElement().querySelector('button');
-    }
-
-    return this._buttonElement;
-  }
-
-  _getButtonMoreTemplate() {
-    return `
-      <button class="ac__load-more-button" type="button">
-        Load more
-      </button>
-    `;
-  }
-
-  _getItemTemplate(item) {
-    const image = item.img ?? 'http://via.placeholder.com/30x40';
-
-    return `
-      <li class="ac__list-item" data-id="${item.id}">
-        <img class="ac__list-item-image" src="${image}"/>
-        ${item.title}
-      </li>
-    `;
-  }
-
-  _getItemsTemplate(items) {
-    return items.map(this._getItemTemplate).join('');
-  }
-
-  _getTemplate({ items, type }) {
-    return `
-      <div>
-        <p class="ac__list-header">${type}</p>
-        <ul class="ac__list" data-type="${type}">
-          ${items.map(this._getItemTemplate).join('')}
-        </ul>
-        ${this._getButtonMoreTemplate(type)}
-      </div>
-    `;
-  }
-}
-
-class Autocomplete {
-  constructor(element) {}
-
-  _getTemplate(data) {}
-}
-
 const autocomplete = (function () {
-  const DEFAULT_SEARCH_TIMEOUT = 500;
+  /**
+   * Utils section
+   */
+  function debounce(fn, delay) {
+    let t;
+    return (...args) => {
+      clearTimeout(t);
+      t = setTimeout(() => fn(...args), delay);
+    };
+  }
+
+  function createElement(template) {
+    const newElement = document.createElement(`div`);
+    newElement.innerHTML = template;
+    return newElement.firstElementChild;
+  }
+
+  function createElements(template) {
+    const newElement = document.createElement(`div`);
+    newElement.innerHTML = template;
+    return newElement.children;
+  }
+
+  function removeChildrenNodes(element) {
+    while (element.firstChild) {
+      element.removeChild(element.firstChild);
+    }
+  }
+
+  function showElement(element) {
+    element.style.display = "block";
+  }
+
+  function hideElement(element) {
+    element.style.display = "none";
+  }
+
+  /**
+   * Components section
+   */
+  class AbstractComponent {
+    constructor(data = {}) {
+      if (new.target === AbstractComponent) {
+        throw new Error("Can not instantiate AbstractComponent");
+      }
+
+      this._data = data;
+      this._element = createElement(this._getTemplate(data));
+      this._initEventListeners();
+    }
+
+    getElement() {
+      return this._element;
+    }
+
+    _getTemplate() {
+      throw new Error("_getTemplate is not defined");
+    }
+
+    _initEventListeners() {}
+  }
+
+  class NoResultsComponent extends AbstractComponent {
+    _getTemplate({ message }) {
+      const DEFAULT_MESSAGE = "Please enter anything else";
+
+      return `
+        <div>
+          <p class="ac-no-results__caption">No results found</p>
+          <p class="ac-no-results__message">${message ?? DEFAULT_MESSAGE}</p>
+        </div>
+      `;
+    }
+  }
+
+  class SectionComponent extends AbstractComponent {
+    _initEventListeners() {
+      this._element.addEventListener("click", (e) => {
+        if (e.target.tagName === "BUTTON") {
+          this._handleClickLoadMore(e.target);
+        }
+
+        if (e.target.tagName === "LI") {
+          this._data.onSelectItem(e.target.dataset.id);
+        }
+      });
+    }
+
+    _handleClickLoadMore() {
+      this._setLoadingState(true);
+
+      this._data.onLoadMore(this._data.section).then((items) => {
+        this._setLoadingState(false);
+        this._addItems(items);
+      });
+    }
+
+    _addItems(items) {
+      const listElement = this._getListElement();
+      const itemElements = createElements(this._getItemsTemplate(items));
+
+      listElement.append(...itemElements);
+    }
+
+    _setLoadingState(isLoading) {
+      const buttonElement = this._getButtonElement();
+
+      if (isLoading) {
+        buttonElement.disabled = true;
+        buttonElement.innerText = "Loading...";
+      } else {
+        buttonElement.disabled = false;
+        buttonElement.innerText = "Load more";
+      }
+    }
+
+    _getListElement() {
+      if (!this._listElement) {
+        this._listElement = this.getElement().querySelector("ul");
+      }
+
+      return this._listElement;
+    }
+
+    _getButtonElement() {
+      if (!this._buttonElement) {
+        this._buttonElement = this.getElement().querySelector("button");
+      }
+
+      return this._buttonElement;
+    }
+
+    _getButtonMoreTemplate() {
+      return `
+        <button class="ac__load-more-button" type="button">
+          Load more
+        </button>
+      `;
+    }
+
+    _getItemTemplate(item) {
+      const image = item.img ?? "http://via.placeholder.com/30x40";
+
+      return `
+        <li class="ac__list-item" data-id="${item.id}">
+          <img class="ac__list-item-image" src="${image}"/>
+          ${item.title}
+        </li>
+      `;
+    }
+
+    _getItemsTemplate(items) {
+      return items.map(this._getItemTemplate).join("");
+    }
+
+    _getTemplate({ items, section }) {
+      return `
+        <div class="ac__section">
+          <p class="ac__list-header">${section}</p>
+          <ul class="ac__list" data-type="${section}">
+            ${items.map(this._getItemTemplate).join("")}
+          </ul>
+          ${this._getButtonMoreTemplate(section)}
+        </div>
+      `;
+    }
+  }
 
   return function autocomplete(element, config = {}) {
+    const DEFAULT_SEARCH_TIMEOUT = 500;
+
     const rootNode = element;
 
     const inputNode = rootNode.querySelector('[ac-element="input"]');
     const dropdownNode = rootNode.querySelector('[ac-element="dropdown"]');
     const spinnerNode = rootNode.querySelector('[ac-element="spinner"]');
 
-    const dataLoader = config.dataLoader;
-    const loadMore = config.onLoadMore;
+    const onSearch = config.onSearch;
+    const onLoadMore = config.onLoadMore;
     const onSelectItem = config.onSelectItem;
     const searchTimeout = config.searchTimeout || DEFAULT_SEARCH_TIMEOUT;
 
-    let currentSearch = '';
+    let currentSearch = "";
+
+    /* Event listeners */
+    inputNode.addEventListener("keyup", handleInputKeyup);
+    document.addEventListener("click", (e) => {
+      if (!rootNode.contains(e.target)) {
+        handleClickOutside();
+      }
+    });
 
     /* Handlers */
-    const handleInputChange = () => {
-      if (currentSearch.length < 3) {
+    const debouncedInputChange = debounce(handleInputChange, searchTimeout);
+
+    function handleInputChange(value) {
+      if (value.length < 3) {
         hideElement(dropdownNode);
         return;
       }
 
       showElement(spinnerNode);
 
-      dataLoader(currentSearch).then((r) => {
+      onSearch(value).then((r) => {
         hideElement(spinnerNode);
-        showResults(r, dropdownNode);
+        handleSearchFinish(r);
       });
-    };
+    }
 
-    const debouncedInputChange = debounce(handleInputChange, searchTimeout);
-
-    const handleKeyup = (e) => {
+    function handleInputKeyup(e) {
       currentSearch = e.target.value;
-      debouncedInputChange();
-    };
+      debouncedInputChange(currentSearch);
+    }
 
-    const handleBlur = () => hideElement(dropdownNode);
+    function handleClickOutside() {
+      hideElement(dropdownNode);
+    }
 
-    const showResults = (results, dropdownNode) => {
-      const isSectionNotEmpty = (section) => results[section].length > 0;
-      const areResultsFound = Object.keys(results).some(isSectionNotEmpty);
+    function handleLoadMore(section) {
+      return onLoadMore(currentSearch, section);
+    }
 
-      const createSection = (items, name) => {
-        const section = new SectionComponent({ items, name, loadMore });
-        return section.getElement();
-      };
+    function handleSearchFinish(results) {
+      const isSectionFilled = (section) => results[section].length > 0;
+      const areResultsFound = Object.keys(results).some(isSectionFilled);
 
-      const sections = Object.keys(results)
-        .filter(isSectionNotEmpty)
-        .map((section) => createSection(results[section], section));
+      if (areResultsFound) {
+        const createSection = (items, section) => {
+          const sectionComponent = new SectionComponent({
+            items,
+            section,
+            onLoadMore: handleLoadMore,
+            onSelectItem,
+          });
 
+          return sectionComponent.getElement();
+        };
+
+        const sections = Object.keys(results)
+          .filter(isSectionFilled)
+          .map((section) => createSection(results[section], section));
+
+        showResults(sections);
+      } else {
+        showEmptyResults();
+      }
+    }
+
+    function showResults(sections) {
+      removeChildrenNodes(dropdownNode);
+      dropdownNode.append(...sections);
+      showElement(dropdownNode);
+    }
+
+    function showEmptyResults() {
       const noResults = new NoResultsComponent();
 
       removeChildrenNodes(dropdownNode);
-
-      if (areResultsFound) {
-        dropdownNode.append(...sections);
-      } else {
-        dropdownNode.append(noResults.getElement());
-      }
-
+      dropdownNode.append(noResults.getElement());
       showElement(dropdownNode);
-    };
-
-    // const handleLoadMoreClick = (type, buttonElement) => {
-    //   enableButtonLoading(buttonElement);
-
-    //   onLoadMore(currentSearch, type).then((items) => {
-    //     disableButtonLoading(buttonElement);
-
-    //     const listElement = Array.from(
-    //       dropdownNode.querySelectorAll(`.ac__list`)
-    //     ).find((node) => node.dataset.type === type);
-
-    //     const list = new ListComponent(items, type);
-    //     listElement.append(...list.getElement());
-    //   });
-    // };
-
-    /* Event listeners */
-    inputNode.addEventListener('keyup', handleKeyup);
-    // inputNode.addEventListener('blur', handleBlur);
-
-    // dropdownNode.addEventListener('click', function (e) {
-    //   if (e.target.tagName === 'BUTTON') {
-    //     handleLoadMoreClick(e.target.dataset.type, e.target);
-    //   }
-    // });
-
-    dropdownNode.addEventListener('click', function (e) {
-      if (e.target.tagName === 'LI') {
-        onSelectItem(e.target.dataset.id);
-      }
-    });
+    }
   };
 })();

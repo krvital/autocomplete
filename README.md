@@ -1,2 +1,4 @@
-# autocomplete
-vanilla js autocomplete
+# Vanilla JS Autocomplete
+
+## How to use
+

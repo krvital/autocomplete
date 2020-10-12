@@ -1,7 +1,7 @@
 :root {
-  --list-item-height: 40px;
-  --list-item-gap: calc(var(--list-item-height) / 3);
-  --category-gap: var(--list-item-height);
+  --ac-list-item-height: 40px;
+  --ac-list-item-gap: calc(var(--ac-list-item-height) / 3);
+  --ac-section-gap: var(--ac-list-item-height);
 }
 
 .ac {
@@ -34,15 +34,23 @@
   overflow-y: auto;
 }
 
+.ac__section {
+  margin-bottom: var(--ac-section-gap);
+}
+
+.ac__section:last-child {
+  margin-bottom: 0;
+}
+
 .ac__list {
   list-style-type: none;
   margin: 0;
-  margin-bottom: var(--list-item-gap);
+  margin-bottom: var(--ac-list-item-gap);
   padding: 0;
 }
 
 .ac__list-header {
-  margin: var(--list-item-gap) 0;
+  margin: var(--ac-list-item-gap) 0;
   text-align: center;
   text-transform: capitalize;
 }
@@ -59,7 +67,7 @@
 }
 
 .ac__list-item-image {
-  height: var(--list-item-height);
+  height: var(--ac-list-item-height);
   width: 30px;
   display: block;
   object-fit: cover;
@@ -71,7 +79,7 @@
 }
 
 .ac__load-more-button {
-  margin: 0 auto var(--category-gap);
+  margin: 0 auto;
   display: block;
   cursor: pointer;
 }
